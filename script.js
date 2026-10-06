@@ -11,6 +11,11 @@
  * Page: A4. Spacing follows the reference quotation (Helvetica 9 pt body text).
  */
 (function () {
+  // Installable app + works offline (see sw.js). Only on http(s), not when opened as a file.
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+
   if (!window.jspdf) {
     document.getElementById("status").textContent =
       "Couldn’t load the PDF library. Check your internet connection and reload the page.";
