@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quotation &amp; Invoice Maker</title>
+    <meta name="robots" content="noindex" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <header class="top">
+      <h1>Quotation &amp; Invoice Maker</h1>
+      <p>Fill in the form — the preview updates as you type. Download saves a PDF named after the customer.</p>
+    </header>
+
+    <main class="layout">
+      <form id="form" class="form" autocomplete="off" novalidate>
+        <!-- Document -->
+        <fieldset class="card">
+          <legend>Document</legend>
+          <div class="segmented" role="radiogroup" aria-label="Document type">
+            <label><input type="radio" name="mode" value="quotation" checked /> <span>Quotation</span></label>
+            <label><input type="radio" name="mode" value="invoice" /> <span>Invoice</span></label>
+          </div>
+          <div class="grid">
+            <label class="field invoice-only">
+              <span>Invoice number</span>
+              <input id="invoiceNo" type="text" />
+            </label>
+            <label class="field">
+              <span>Date</span>
+              <input id="date" type="date" />
+            </label>
+          </div>
+          <label class="field">
+            <span>Work</span>
+            <textarea id="work" rows="2"></textarea>
+          </label>
+        </fieldset>
+
+        <!-- Your details -->
+        <fieldset class="card">
+          <legend>Your details</legend>
+          <div class="logo-row">
+            <img id="logoPreview" alt="Your logo" hidden />
+            <label class="btn btn-light" id="logoPick">
+              Upload logo
+              <input id="logo" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+            </label>
+            <button type="button" class="btn btn-light" id="logoRemove" hidden>Remove logo</button>
+          </div>
+          <label class="check">
+            <input id="logoAsLetter" type="checkbox" checked />
+            The logo is the first letter of my name (prints “anesh Desai” next to it)
+          </label>
+          <div class="grid">
+            <label class="field">
+              <span>Name</span>
+              <input id="name" type="text" />
+            </label>
+            <label class="field">
+              <span>Phone</span>
+              <input id="phone" type="tel" />
+            </label>
+            <label class="field gst-only">
+              <span>Your GSTIN (optional)</span>
+              <input id="gstin" type="text" maxlength="15" spellcheck="false" />
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- To -->
+        <fieldset class="card">
+          <legend>To</legend>
+          <label class="field">
+            <span>Customer name <small>(also the PDF file name)</small></span>
+            <input id="toName" type="text" />
+          </label>
+          <label class="field">
+            <span>Address</span>
+            <textarea id="toAddress" rows="3"></textarea>
+          </label>
+          <label class="field gst-only">
+            <span>Customer GSTIN (optional)</span>
+            <input id="toGstin" type="text" maxlength="15" spellcheck="false" />
+          </label>
+        </fieldset>
+
+        <!-- Items -->
+        <fieldset class="card">
+          <legend>Items</legend>
+          <div id="items"></div>
+          <button type="button" class="btn btn-light" id="addItem">+ Add item</button>
+
+          <div class="totals">
+            <label class="check quotation-only">
+              <input id="showTotal" type="checkbox" />
+              Show a total (leave off when the items are options to choose from)
+            </label>
+            <label class="check">
+              <input id="gst" type="checkbox" />
+              Add GST at 18%
+            </label>
+            <label class="field gst-only">
+              <span>GST type</span>
+              <select id="gstType">
+                <option value="cgst-sgst">CGST 9% + SGST 9% (same state)</option>
+                <option value="igst">IGST 18% (other state)</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Wording -->
+        <fieldset class="card">
+          <legend>Wording</legend>
+          <label class="field">
+            <span>Opening paragraph</span>
+            <textarea id="intro" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span>Terms &amp; Conditions <small>(one per line)</small></span>
+            <textarea id="terms" rows="6"></textarea>
+          </label>
+          <label class="field">
+            <span>Payments in favour of</span>
+            <input id="payee" type="text" />
+          </label>
+        </fieldset>
+
+        <div class="card actions">
+          <label class="check">
+            <input id="remember" type="checkbox" checked />
+            Remember my logo, details and wording on this device
+          </label>
+          <div class="buttons">
+            <button type="button" class="btn btn-dark" id="download">Download PDF</button>
+            <button type="button" class="btn btn-light" id="reset">Start a new one</button>
+          </div>
+          <p class="note" id="status" role="status"></p>
+        </div>
+      </form>
+
+      <aside class="preview" aria-label="PDF preview">
+        <div id="pages"></div>
+      </aside>
+    </main>
+
+    <template id="itemTpl">
+      <div class="item">
+        <div class="item-head">
+          <span class="item-no"></span>
+          <button type="button" class="icon" data-act="remove" aria-label="Remove item">×</button>
+        </div>
+        <label class="field">
+          <span>Bold heading <small>(optional, e.g. External:)</small></span>
+          <input data-k="heading" type="text" />
+        </label>
+        <label class="field">
+          <span>Description</span>
+          <textarea data-k="text" rows="2"></textarea>
+        </label>
+        <label class="field">
+          <span>Amount (₹)</span>
+          <input data-k="amount" type="number" min="0" step="any" inputmode="decimal" />
+        </label>
+      </div>
+    </template>
+  </body>
+</html>
