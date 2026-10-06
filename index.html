@@ -162,10 +162,29 @@
           <span>Description</span>
           <textarea data-k="text" rows="2"></textarea>
         </label>
-        <label class="field">
-          <span>Amount (₹)</span>
-          <input data-k="amount" type="number" min="0" step="any" inputmode="decimal" />
-        </label>
+        <div class="grid">
+          <label class="field invoice-only">
+            <span>Quantity</span>
+            <input data-k="qty" type="number" min="0" step="any" inputmode="decimal" />
+          </label>
+          <label class="field">
+            <span>Unit</span>
+            <select data-k="unit">
+              <option value="sqft">Square Feet (Sq. Ft.)</option>
+              <option value="rft">Running Feet (R. Ft.)</option>
+              <option value="lumpsum">Lump Sum</option>
+            </select>
+          </label>
+          <label class="field invoice-only">
+            <span>Rate (₹ per unit)</span>
+            <input data-k="rate" type="number" min="0" step="any" inputmode="decimal" />
+          </label>
+          <label class="field quotation-only">
+            <span>Amount (₹)</span>
+            <input data-k="amount" type="number" min="0" step="any" inputmode="decimal" />
+          </label>
+        </div>
+        <p class="line-amount invoice-only" data-out="amount"></p>
       </div>
     </template>
   </body>

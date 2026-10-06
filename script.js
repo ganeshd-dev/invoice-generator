@@ -8,8 +8,7 @@
  * <canvas> for the live preview, and into a jsPDF document for the download,
  * so the preview always matches the PDF.
  *
- * Page geometry follows the reference quotation: US Letter, 612 × 792 pt,
- * Helvetica 9 pt body text.
+ * Page: A4. Spacing follows the reference quotation (Helvetica 9 pt body text).
  */
 (function () {
   if (!window.jspdf) {
@@ -22,20 +21,44 @@
   const STORE_KEY = "quotation-maker:v1";
 
   // ---------- Page geometry (points) ----------
-  const PAGE_W = 612;
-  const PAGE_H = 792;
-  const BORDER = { x: 24, y: 24, w: 564, h: 744 };
+  // A4 paper. The content is laid out on the reference PDF's 612 pt-wide grid
+  // and centred on the page (DX), so text wraps exactly as it did there.
+  const PAGE_W = 595.28;
+  const PAGE_H = 841.89;
+  const LAYOUT_W = 612;
+  const DX = (PAGE_W - LAYOUT_W) / 2;
+  const BORDER = { x: 20, y: 24, w: PAGE_W - 40, h: PAGE_H - 48 };
   const TEXT_X = 78; // WORK / TO / opening paragraph
-  const TABLE = { left: 72, c1: 124, c2: 462, right: 544 };
+  const TABLE = { left: 72, right: 544 };
+  // Table columns. A quotation has SR. NO. | DESCRIPTION | UNIT | AMOUNT;
+  // an invoice adds QTY and RATE, and its amount is QTY × RATE.
+  const COLS = {
+    quotation: [
+      { k: "sr", label: "SR. NO.", x0: 72, x1: 112 },
+      { k: "desc", label: "DESCRIPTION", x0: 112, x1: 430 },
+      { k: "unit", label: "UNIT", x0: 430, x1: 482 },
+      { k: "amount", label: "AMOUNT", x0: 482, x1: 544 },
+    ],
+    invoice: [
+      { k: "sr", label: "SR. NO.", x0: 72, x1: 110 },
+      { k: "desc", label: "DESCRIPTION", x0: 110, x1: 318 },
+      { k: "qty", label: "QTY", x0: 318, x1: 360 },
+      { k: "unit", label: "UNIT", x0: 360, x1: 406 },
+      { k: "rate", label: "RATE", x0: 406, x1: 472 },
+      { k: "amount", label: "AMOUNT", x0: 472, x1: 544 },
+    ],
+  };
   const BODY = 9; // font size
   const LEAD = 11.5; // line spacing for body text
-  const BOTTOM = 738; // last usable baseline before the border
+  const BOTTOM = PAGE_H - 54; // last usable baseline before the border
   const CONT_TOP = 60; // where content starts on page 2+
   const GREY = "#7f7f7f";
   const BLACK = "#000000";
   const LOGO_H = 70;
-  // Line widths that wrap the sample text exactly where the reference PDF does.
-  const DESC_W = 300;
+  // What the PDF prints for each unit choice.
+  const UNITS = { sqft: "Sq. Ft.", rft: "R. Ft.", lumpsum: "Lump Sum" };
+  // Opening-paragraph width that wraps the sample text exactly where the reference PDF does
+  // (the description column is sized the same way: 318 − 18 = 300).
   const INTRO_W = 440;
 
   // ---------- Default wording ----------
@@ -75,24 +98,36 @@
       {
         heading: "External:",
         text: "Washing + Crack filling + 1 Coat Normal Primer(Without warranty) + 2 Coat ACE Paint + Staircase & Lobby Putty 2 Coat OBD Paint",
+        unit: "lumpsum",
+        qty: 1,
+        rate: 240000,
         amount: 240000,
       },
       {
         heading: "External:",
         text: "Washing + Crack filling + 1 Coat Normal Primer(Without warranty) + 2 Coat Apex Paint + Staircase & Lobby Putty 2 Coat OBD Paint",
+        unit: "lumpsum",
+        qty: 1,
+        rate: 265000,
         amount: 265000,
       },
       {
         heading: "External:",
         text: "Washing + Crack filling + 1 Coat Damp Prime(5 year warranty) + 2 Coat Apex Paint + Staircase & Lobby Putty 2 Coat OBD Paint",
+        unit: "lumpsum",
+        qty: 1,
+        rate: 320000,
         amount: 320000,
       },
       {
         heading: "External:",
         text: "Washing + Crack filling + 1 Coat Damp Prime(5 year warranty) + 2 Coat Ultima Paint + Staircase & Lobby Putty 2 Coat OBD Paint",
+        unit: "lumpsum",
+        qty: 1,
+        rate: 380000,
         amount: 380000,
       },
-      { heading: "", text: "Oil Paint (Window grill & Staircase railing only)", amount: 35000 },
+      { heading: "", text: "Oil Paint (Window grill & Staircase railing only)", unit: "lumpsum", qty: 1, rate: 35000, amount: 35000 },
     ],
   };
 
@@ -140,6 +175,20 @@
       : v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  /** 1250.5 → "1,250.5" */
+  function qtyText(n) {
+    return n === "" || n == null ? "" : (Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  }
+
+  const has = (v) => v !== "" && v != null;
+
+  /** A quotation line has a typed amount; an invoice line is quantity × rate. */
+  function itemAmount(it) {
+    if (s.mode !== "invoice") return has(it.amount) ? Number(it.amount) || 0 : null;
+    if (!has(it.qty) || !has(it.rate)) return null;
+    return Math.round((Number(it.qty) || 0) * (Number(it.rate) || 0) * 100) / 100;
+  }
+
   /** "INV-009" → "INV-010", keeping zero padding. */
   function nextNumber(n) {
     const m = /^(.*?)(\d+)(\D*)$/.exec(n || "");
@@ -179,7 +228,7 @@
   }
 
   // ---------- Text measuring and wrapping ----------
-  const meter = new jsPDF({ unit: "pt", format: "letter" });
+  const meter = new jsPDF({ unit: "pt", format: "a4" });
 
   function width(text, style, size) {
     meter.setFont("helvetica", style);
@@ -260,7 +309,7 @@
       ops.push({ t: "rect", ...BORDER, stroke: BLACK, lw: 1 });
     };
     const text = (x, y, str, style = "normal", size = BODY, color = BLACK) => {
-      if (str) ops.push({ t: "text", x, y, s: str, style, size, color });
+      if (str) ops.push({ t: "text", x: x + DX, y, s: str, style, size, color });
     };
     const runs = (x, y, line, size = BODY) => {
       let cx = x;
@@ -269,7 +318,14 @@
         cx += width(r.t, r.style, size);
       }
     };
-    const box = (x, y, w, h, fill) => ops.push({ t: "rect", x, y, w, h, stroke: BLACK, lw: 0.9, fill });
+    const box = (x, y, w, h, fill) => ops.push({ t: "rect", x: x + DX, y, w, h, stroke: BLACK, lw: 0.9, fill });
+    // Text centred in a table column; long numbers get a smaller font so they stay inside.
+    const cell = (col, y, str, style = "normal") => {
+      if (!str) return;
+      const room = col.x1 - col.x0 - 6;
+      const size = Math.min(BODY, (BODY * room) / (width(str, style, BODY) || 1));
+      text(col.x0 + (col.x1 - col.x0 - width(str, style, size)) / 2, y, str, style, size);
+    };
 
     newPage();
     const isInvoice = s.mode === "invoice";
@@ -287,9 +343,9 @@
     const logoH = hasLogo ? logoW / logoAspect : 0;
     const gap = hasLogo ? (asLetter ? 1 : 12) : 0;
     const blockW = Math.max(nameW, phoneW);
-    const x0 = (PAGE_W - (logoW + gap + blockW)) / 2;
+    const x0 = (LAYOUT_W - (logoW + gap + blockW)) / 2;
     const top = 97;
-    if (hasLogo) ops.push({ t: "img", x: x0, y: top + (LOGO_H - logoH) / 2, w: logoW, h: logoH });
+    if (hasLogo) ops.push({ t: "img", x: x0 + DX, y: top + (LOGO_H - logoH) / 2, w: logoW, h: logoH });
     const bx = x0 + logoW + gap;
     const nameX = asLetter ? bx : bx + (blockW - nameW) / 2;
     text(nameX, top + 37, shownName, "bold", 28);
@@ -304,7 +360,7 @@
 
     // Title
     const title = isInvoice ? "INVOICE" : "QUOTATION";
-    text((PAGE_W - width(title, "bold", 18)) / 2, 205 + shift, title, "bold", 18, GREY);
+    text((LAYOUT_W - width(title, "bold", 18)) / 2, 205 + shift, title, "bold", 18, GREY);
 
     // WORK (left) and number/date (right)
     const y0 = 234 + shift;
@@ -352,42 +408,45 @@
     }
 
     // Table
+    const cols = COLS[isInvoice ? "invoice" : "quotation"];
+    const col = Object.fromEntries(cols.map((c) => [c.k, c]));
     const tableHeader = (ty) => {
-      box(TABLE.left, ty, TABLE.c1 - TABLE.left, 31, "#f2f2f2");
-      box(TABLE.c1, ty, TABLE.c2 - TABLE.c1, 31, "#f2f2f2");
-      box(TABLE.c2, ty, TABLE.right - TABLE.c2, 31, "#f2f2f2");
-      const centre = (a, b, label) => text(a + (b - a - width(label, "bold", BODY)) / 2, ty + 19, label, "bold");
-      centre(TABLE.left, TABLE.c1, "SR. NO.");
-      centre(TABLE.c1, TABLE.c2, "DESCRIPTION");
-      centre(TABLE.c2, TABLE.right, "AMOUNT");
+      for (const c of cols) {
+        box(c.x0, ty, c.x1 - c.x0, 31, "#f2f2f2");
+        text(c.x0 + (c.x1 - c.x0 - width(c.label, "bold", BODY)) / 2, ty + 19, c.label, "bold");
+      }
       return ty + 31;
     };
 
     let ty = tableHeader(y + 14);
-    const items = s.items.filter((it) => it.heading.trim() || it.text.trim() || Number(it.amount));
+    const items = s.items.filter(
+      (it) => it.heading.trim() || it.text.trim() || (isInvoice ? has(it.qty) || has(it.rate) : has(it.amount))
+    );
     items.forEach((it, i) => {
       const parts = [];
       if (it.heading.trim()) parts.push({ t: `${it.heading.trim()} `, style: "bold" });
       if (it.text.trim()) parts.push({ t: it.text.trim(), style: "normal" });
-      const lines = wrap(parts, BODY, DESC_W);
+      const lines = wrap(parts, BODY, col.desc.x1 - col.desc.x0 - 18);
       const h = Math.max(30, 13 + (lines.length - 1) * 11.7 + 13.5);
       if (ty + h > BOTTOM) {
         newPage();
         ty = tableHeader(CONT_TOP);
       }
-      box(TABLE.left, ty, TABLE.c1 - TABLE.left, h);
-      box(TABLE.c1, ty, TABLE.c2 - TABLE.c1, h);
-      box(TABLE.c2, ty, TABLE.right - TABLE.c2, h);
-      const sr = `${i + 1}.`;
-      text(TABLE.left + (TABLE.c1 - TABLE.left - width(sr, "normal", BODY)) / 2, ty + 13, sr);
-      lines.forEach((ln, j) => runs(TABLE.c1 + 10, ty + 13 + j * 11.7, ln));
-      const amt = it.amount === "" || it.amount == null ? "" : inr(it.amount);
-      text(TABLE.c2 + (TABLE.right - TABLE.c2 - width(amt, "normal", BODY)) / 2, ty + 13, amt);
+      for (const c of cols) box(c.x0, ty, c.x1 - c.x0, h);
+      cell(col.sr, ty + 13, `${i + 1}.`);
+      lines.forEach((ln, j) => runs(col.desc.x0 + 10, ty + 13 + j * 11.7, ln));
+      cell(col.unit, ty + 13, UNITS[it.unit] || "");
+      if (isInvoice) {
+        cell(col.qty, ty + 13, qtyText(it.qty));
+        cell(col.rate, ty + 13, has(it.rate) ? inr(it.rate) : "");
+      }
+      const amount = itemAmount(it);
+      cell(col.amount, ty + 13, amount == null ? "" : inr(amount));
       ty += h;
     });
 
     // Totals
-    const total = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+    const total = items.reduce((sum, it) => sum + (itemAmount(it) || 0), 0);
     const totalRows = [];
     if (isInvoice || s.showTotal || s.gst) {
       if (s.gst) {
@@ -413,12 +472,11 @@
         newPage();
         ty = CONT_TOP;
       }
-      box(TABLE.left, ty, TABLE.c2 - TABLE.left, h);
-      box(TABLE.c2, ty, TABLE.right - TABLE.c2, h);
+      box(TABLE.left, ty, col.amount.x0 - TABLE.left, h);
+      box(col.amount.x0, ty, col.amount.x1 - col.amount.x0, h);
       const st = strong ? "bold" : "normal";
-      text(TABLE.c2 - 10 - width(label, st, BODY), ty + 15.5, label, st);
-      const v = inr(value);
-      text(TABLE.c2 + (TABLE.right - TABLE.c2 - width(v, st, BODY)) / 2, ty + 15.5, v, st);
+      text(col.amount.x0 - 10 - width(label, st, BODY), ty + 15.5, label, st);
+      cell(col.amount, ty + 15.5, inr(value), st);
       ty += h;
     }
     y = ty;
@@ -510,10 +568,10 @@
   }
 
   function buildPdf(pages) {
-    const doc = new jsPDF({ unit: "pt", format: "letter" });
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
     doc.setProperties({ title: fileName().replace(/\.pdf$/, ""), author: s.name, creator: "Quotation & Invoice Maker" });
     pages.forEach((ops, i) => {
-      if (i > 0) doc.addPage("letter");
+      if (i > 0) doc.addPage("a4");
       for (const o of ops) {
         if (o.t === "rect") {
           doc.setLineWidth(o.lw);
@@ -583,6 +641,14 @@
       : " The logo is the first letter of my name";
   }
 
+  /** Invoice lines show their worked-out amount (QTY × RATE) under the inputs. */
+  function showLineAmount(node, it) {
+    const out = node.querySelector('[data-out="amount"]');
+    if (!out) return;
+    const a = itemAmount({ ...it, qty: it.qty, rate: it.rate });
+    out.textContent = s.mode === "invoice" && a != null ? `Amount: ₹${inr(a)}` : "Amount: —";
+  }
+
   const itemsEl = $("items");
   const tpl = $("itemTpl");
   function renderItems() {
@@ -591,11 +657,13 @@
       const node = tpl.content.firstElementChild.cloneNode(true);
       node.dataset.i = i;
       node.querySelector(".item-no").textContent = `Item ${i + 1}`;
+      if (!UNITS[it.unit]) it.unit = "lumpsum";
       for (const input of node.querySelectorAll("[data-k]")) {
         const k = input.dataset.k;
         input.value = it[k] === 0 || it[k] ? it[k] : "";
       }
       node.querySelector('[data-act="remove"]').disabled = s.items.length === 1;
+      showLineAmount(node, it);
       itemsEl.appendChild(node);
     });
   }
@@ -605,7 +673,9 @@
     const item = el.closest(".item");
     if (item) {
       const it = s.items[Number(item.dataset.i)];
-      it[el.dataset.k] = el.dataset.k === "amount" ? (el.value === "" ? "" : Number(el.value)) : el.value;
+      const k = el.dataset.k;
+      it[k] = ["amount", "qty", "rate"].includes(k) ? (el.value === "" ? "" : Number(el.value)) : el.value;
+      showLineAmount(item, it);
     } else if (fields.includes(el.id)) {
       s[el.id] = el.value;
       if (el.id === "name") updateLetterHint();
@@ -625,6 +695,7 @@
     const el = e.target;
     if (el.name === "mode") {
       s.mode = el.value;
+      renderItems();
       $("intro").value = s.mode === "invoice" ? s.introI : s.introQ;
       $("terms").value = s.mode === "invoice" ? s.termsI : s.termsQ;
       if (s.mode === "invoice" && s.work === SAMPLE.work) {
@@ -654,7 +725,7 @@
   });
 
   $("addItem").addEventListener("click", () => {
-    s.items.push({ heading: "", text: "", amount: "" });
+    s.items.push({ heading: "", text: "", unit: "lumpsum", qty: "", rate: "", amount: "" });
     renderItems();
     itemsEl.lastElementChild.querySelector('[data-k="text"]').focus();
     render();
@@ -777,7 +848,7 @@
     s.toName = "";
     s.toAddress = "";
     s.toGstin = "";
-    s.items = [{ heading: "", text: "", amount: "" }];
+    s.items = [{ heading: "", text: "", unit: "lumpsum", qty: "", rate: "", amount: "" }];
     if (s.mode === "invoice") s.invoiceNo = s.nextInvoice || s.invoiceNo;
     $("status").textContent = "";
     fillForm();

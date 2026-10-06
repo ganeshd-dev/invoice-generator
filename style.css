@@ -247,6 +247,12 @@ textarea:focus {
   cursor: not-allowed;
 }
 
+.line-amount {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
 .totals {
   margin-top: 14px;
   padding-top: 12px;
